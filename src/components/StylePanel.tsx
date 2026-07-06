@@ -87,6 +87,21 @@ export default function StylePanel({ cfg, onChange }: Props) {
         <input type="checkbox" checked={s.showMetrics} onChange={(e) => set('showMetrics', e.target.checked)} />
         顯示 metrics 摘要框（Accuracy / Precision / Recall）
       </label>
+      {s.showMetrics && (
+        <>
+          <div className="row">
+            <label htmlFor="st-mpos">Metrics 位置</label>
+            <select id="st-mpos" value={s.metricsPosition} onChange={(e) => set('metricsPosition', e.target.value as StyleConfig['metricsPosition'])}>
+              <option value="inside">圖內（矩陣右下角）</option>
+              <option value="outside">圖表下方（不遮擋格子）</option>
+            </select>
+          </div>
+          <div className="row">
+            <label htmlFor="st-mfs">Metrics 字級</label>
+            <input id="st-mfs" type="number" min={8} max={30} value={s.metricsFontSize} onChange={(e) => set('metricsFontSize', Number(e.target.value) || 15)} />
+          </div>
+        </>
+      )}
     </div>
   )
 }
