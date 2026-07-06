@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { MatrixConfig } from '../types'
 import { resizeMatrix } from '../types'
 import { parsePasted, applyParsed } from '../lib/parse'
@@ -13,6 +13,7 @@ type Tab = 'manual' | 'paste' | 'image'
 
 export default function DataInput({ cfg, onChange }: Props) {
   const [tab, setTab] = useState<Tab>('manual')
+  const [expanded, setExpanded] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [imageUrl, setImageUrl] = useState<string | null>(null)
@@ -22,6 +23,15 @@ export default function DataInput({ cfg, onChange }: Props) {
   const imageFileRef = useRef<File | null>(null)
 
   const n = cfg.labels.length
+
+  useEffect(() => {
+    if (!expanded) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpanded(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [expanded])
 
   function setCount(i: number, j: number, v: number) {
     const counts = cfg.counts.map((row) => [...row])
@@ -66,15 +76,16 @@ export default function DataInput({ cfg, onChange }: Props) {
     try {
       const result = await recognizeMatrix(file, n, setOcrProgress)
       if (result.grid) {
-        const counts = result.grid
-        onChange({ ...cfg, ...resizeToGrid(cfg, counts) })
-        setOcrState('done')
+        onChange({ ...cfg, ...resizeToGrid(cfg, result.grid, result.labels) })
+        setOcrState(result.needsReview ? 'partial' : 'done')
+        setTab('manual') // 直接帶到已填好數值的表格，旁邊有原圖可對照修改
       } else if (result.numbers.length >= n * n) {
         // 無法確定網格位置時，依閱讀順序取前 n×n 個整數當草稿
         const flat = result.numbers.slice(0, n * n)
         const counts = Array.from({ length: n }, (_, i) => flat.slice(i * n, (i + 1) * n))
-        onChange({ ...cfg, ...resizeToGrid(cfg, counts) })
+        onChange({ ...cfg, ...resizeToGrid(cfg, counts, result.labels) })
         setOcrState('partial')
+        setTab('manual')
       } else {
         setOcrState('failed')
       }
@@ -82,6 +93,65 @@ export default function DataInput({ cfg, onChange }: Props) {
       setOcrState('failed')
       setError(e instanceof Error ? e.message : String(e))
     }
+  }
+
+  /** Enter / ↑↓ 在同一欄的上下格之間移動（覆蓋 number input 原生的增減行為） */
+  function onGridKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    const t = e.target as HTMLElement
+    if (!(t instanceof HTMLInputElement) || t.dataset.i === undefined) return
+    let di = 0
+    if (e.key === 'ArrowDown' || e.key === 'Enter') di = 1
+    else if (e.key === 'ArrowUp') di = -1
+    else return
+    e.preventDefault()
+    const next = e.currentTarget.querySelector<HTMLInputElement>(
+      `input[data-i="${Number(t.dataset.i) + di}"][data-j="${t.dataset.j}"]`,
+    )
+    next?.focus()
+    next?.select()
+  }
+
+  function renderGrid() {
+    return (
+      <div className="grid-scroll" onKeyDown={onGridKeyDown}>
+        <table className="grid-input">
+          <thead>
+            <tr>
+              <th aria-label="空白" />
+              {cfg.labels.map((label, j) => (
+                <th key={j}>
+                  <input
+                    aria-label={`類別 ${j + 1} 名稱`}
+                    value={label}
+                    onChange={(e) => setLabel(j, e.target.value)}
+                  />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {cfg.counts.map((row, i) => (
+              <tr key={i}>
+                <th className="rowhead">{cfg.labels[i]}</th>
+                {row.map((v, j) => (
+                  <td key={j}>
+                    <input
+                      type="number"
+                      min={0}
+                      data-i={i}
+                      data-j={j}
+                      aria-label={`True ${cfg.labels[i]}、Predicted ${cfg.labels[j]}`}
+                      value={v}
+                      onChange={(e) => setCount(i, j, Number(e.target.value) || 0)}
+                    />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
   }
 
   return (
@@ -116,44 +186,23 @@ export default function DataInput({ cfg, onChange }: Props) {
                 <option key={k} value={k}>{k}</option>
               ))}
             </select>
+            <button className="btn" onClick={() => setExpanded(true)}>⤢ 放大編輯</button>
           </div>
-          <div className="grid-scroll">
-            <table className="grid-input">
-              <thead>
-                <tr>
-                  <th aria-label="空白" />
-                  {cfg.labels.map((label, j) => (
-                    <th key={j}>
-                      <input
-                        aria-label={`類別 ${j + 1} 名稱`}
-                        value={label}
-                        onChange={(e) => setLabel(j, e.target.value)}
-                      />
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {cfg.counts.map((row, i) => (
-                  <tr key={i}>
-                    <th className="rowhead">{cfg.labels[i]}</th>
-                    {row.map((v, j) => (
-                      <td key={j}>
-                        <input
-                          type="number"
-                          min={0}
-                          aria-label={`True ${cfg.labels[i]}、Predicted ${cfg.labels[j]}`}
-                          value={v}
-                          onChange={(e) => setCount(i, j, Number(e.target.value) || 0)}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="hint">列 = True label、欄 = Predicted label。欄位名稱可直接編輯。</p>
+          {renderGrid()}
+          <p className="hint">
+            列 = True label、欄 = Predicted label。欄位名稱可直接編輯；Enter / ↑↓ 可在上下格間移動。
+          </p>
+          {imageUrl && (ocrState === 'done' || ocrState === 'partial') && (
+            <>
+              {ocrState === 'done' && (
+                <p className="hint ok">已自動填入 OCR 辨識結果，請對照下方原圖核對修正。</p>
+              )}
+              {ocrState === 'partial' && (
+                <p className="hint warn">OCR 有部分數字無法確定（已盡量預填、缺漏補 0），請務必對照下方原圖逐格核對。</p>
+              )}
+              <img className="ocr-preview" src={imageUrl} alt="上傳的 confusion matrix 原圖對照" />
+            </>
+          )}
         </>
       )}
 
@@ -187,30 +236,57 @@ export default function DataInput({ cfg, onChange }: Props) {
             <>
               <img className="ocr-preview" src={imageUrl} alt="上傳的 confusion matrix 原圖" />
               <button className="btn primary" onClick={handleOcr} disabled={ocrState === 'running'}>
-                {ocrState === 'running' ? `辨識中… ${(ocrProgress * 100).toFixed(0)}%` : `OCR 辨識（${n}×${n}）`}
+                {ocrState === 'running' ? `辨識中… ${(ocrProgress * 100).toFixed(0)}%` : 'OCR 辨識（自動偵測類別數）'}
               </button>
-              {ocrState === 'done' && <p className="hint ok">已辨識並填入數值，請切到「手動輸入」確認每一格。</p>}
-              {ocrState === 'partial' && (
-                <p className="hint warn">無法確定格子位置，已依閱讀順序預填，請務必逐格核對修正。</p>
-              )}
               {ocrState === 'failed' && (
-                <p className="hint warn">辨識不到足夠的數字，請改用手動輸入（原圖保留在此對照）。</p>
+                <p className="hint warn">
+                  辨識不到足夠的數字。已嘗試多種影像強化仍失敗，請改用手動輸入（原圖保留在此對照），
+                  或改上傳解析度較高、文字較清晰的圖。
+                </p>
               )}
-              <p className="hint">OCR 為輔助預填，數值請以原圖為準核對。類別數請先在「手動輸入」設定正確。</p>
+              <p className="hint">
+                OCR 為輔助預填，會自動偵測類別數並嘗試多種影像強化（含彩色數字）。
+                辨識完成會自動切到「手動輸入」，並在表格下方保留原圖對照。
+              </p>
             </>
           )}
         </>
       )}
 
       {error && <p className="hint warn">{error}</p>}
+
+      {expanded && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="放大編輯數值"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setExpanded(false)
+          }}
+        >
+          <div className="modal-card">
+            <div className="modal-head">
+              <b>編輯數值（{n} × {n}）</b>
+              <button className="btn primary" onClick={() => setExpanded(false)}>完成</button>
+            </div>
+            {renderGrid()}
+            <p className="hint">Enter / ↑↓ 在上下格間移動；Esc、點背景或按「完成」關閉。修改會即時同步到預覽。</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function resizeToGrid(cfg: MatrixConfig, counts: number[][]): Pick<MatrixConfig, 'labels' | 'counts' | 'order'> {
+function resizeToGrid(
+  cfg: MatrixConfig,
+  counts: number[][],
+  ocrLabels: string[] | null,
+): Pick<MatrixConfig, 'labels' | 'counts' | 'order'> {
   const n = counts.length
   return {
-    labels: Array.from({ length: n }, (_, i) => cfg.labels[i] ?? `class_${i + 1}`),
+    labels: ocrLabels ?? Array.from({ length: n }, (_, i) => cfg.labels[i] ?? `class_${i + 1}`),
     counts,
     order: Array.from({ length: n }, (_, i) => i),
   }
