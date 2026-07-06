@@ -67,14 +67,16 @@ export default function DataInput({ cfg, onChange }: Props) {
       const result = await recognizeMatrix(file, n, setOcrProgress)
       if (result.grid) {
         const counts = result.grid
-        onChange({ ...cfg, ...resizeToGrid(cfg, counts) })
+        onChange({ ...cfg, ...resizeToGrid(cfg, counts, result.labels) })
         setOcrState('done')
+        setTab('manual') // 直接帶到已填好數值的表格，旁邊有原圖可對照修改
       } else if (result.numbers.length >= n * n) {
         // 無法確定網格位置時，依閱讀順序取前 n×n 個整數當草稿
         const flat = result.numbers.slice(0, n * n)
         const counts = Array.from({ length: n }, (_, i) => flat.slice(i * n, (i + 1) * n))
-        onChange({ ...cfg, ...resizeToGrid(cfg, counts) })
+        onChange({ ...cfg, ...resizeToGrid(cfg, counts, result.labels) })
         setOcrState('partial')
+        setTab('manual')
       } else {
         setOcrState('failed')
       }
@@ -154,6 +156,17 @@ export default function DataInput({ cfg, onChange }: Props) {
             </table>
           </div>
           <p className="hint">列 = True label、欄 = Predicted label。欄位名稱可直接編輯。</p>
+          {imageUrl && (ocrState === 'done' || ocrState === 'partial') && (
+            <>
+              {ocrState === 'done' && (
+                <p className="hint ok">已自動填入 OCR 辨識結果，請對照下方原圖核對修正。</p>
+              )}
+              {ocrState === 'partial' && (
+                <p className="hint warn">OCR 無法確定格子位置，已依閱讀順序預填，請務必對照下方原圖逐格核對。</p>
+              )}
+              <img className="ocr-preview" src={imageUrl} alt="上傳的 confusion matrix 原圖對照" />
+            </>
+          )}
         </>
       )}
 
@@ -189,14 +202,13 @@ export default function DataInput({ cfg, onChange }: Props) {
               <button className="btn primary" onClick={handleOcr} disabled={ocrState === 'running'}>
                 {ocrState === 'running' ? `辨識中… ${(ocrProgress * 100).toFixed(0)}%` : `OCR 辨識（${n}×${n}）`}
               </button>
-              {ocrState === 'done' && <p className="hint ok">已辨識並填入數值，請切到「手動輸入」確認每一格。</p>}
-              {ocrState === 'partial' && (
-                <p className="hint warn">無法確定格子位置，已依閱讀順序預填，請務必逐格核對修正。</p>
-              )}
               {ocrState === 'failed' && (
                 <p className="hint warn">辨識不到足夠的數字，請改用手動輸入（原圖保留在此對照）。</p>
               )}
-              <p className="hint">OCR 為輔助預填，數值請以原圖為準核對。類別數請先在「手動輸入」設定正確。</p>
+              <p className="hint">
+                OCR 為輔助預填，辨識完成會自動切到「手動輸入」，並在表格下方保留原圖對照。
+                類別數請先在「手動輸入」設定正確。
+              </p>
             </>
           )}
         </>
@@ -207,10 +219,14 @@ export default function DataInput({ cfg, onChange }: Props) {
   )
 }
 
-function resizeToGrid(cfg: MatrixConfig, counts: number[][]): Pick<MatrixConfig, 'labels' | 'counts' | 'order'> {
+function resizeToGrid(
+  cfg: MatrixConfig,
+  counts: number[][],
+  ocrLabels: string[] | null,
+): Pick<MatrixConfig, 'labels' | 'counts' | 'order'> {
   const n = counts.length
   return {
-    labels: Array.from({ length: n }, (_, i) => cfg.labels[i] ?? `class_${i + 1}`),
+    labels: ocrLabels ?? Array.from({ length: n }, (_, i) => cfg.labels[i] ?? `class_${i + 1}`),
     counts,
     order: Array.from({ length: n }, (_, i) => i),
   }

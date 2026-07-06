@@ -5,8 +5,8 @@ export interface OcrResult {
   grid: number[][] | null
   /** 所有辨識到的整數 token（依閱讀順序），供無法聚類時參考 */
   numbers: number[]
-  /** 圖片中偵測到的候選類別名稱（軸標籤文字） */
-  labelCandidates: string[]
+  /** 可靠辨識出的類別名稱（軸標籤在 x/y 軸各出現一次、數量剛好 n 個時才回傳） */
+  labels: string[] | null
 }
 
 interface Token {
@@ -65,7 +65,31 @@ export async function recognizeMatrix(
     .sort((a, b) => a.cy - b.cy || a.cx - b.cx)
     .map((t) => t.value)
 
-  return { grid: clusterToGrid(tokens, n), numbers, labelCandidates }
+  return { grid: clusterToGrid(tokens, n), numbers, labels: matchLabels(labelCandidates, n) }
+}
+
+/**
+ * 類別名稱在圖上會出現兩次（y 軸與 x 軸各一次）。先合併近似重複的候選字
+ * （OCR 常把同一個標籤截尾，如 non_nsvt / non_nsv），再取出現至少兩次者，
+ * 依首次出現順序排列；剛好湊滿 n 個才採用，寧缺勿錯。
+ */
+function matchLabels(candidates: string[], n: number): string[] | null {
+  // groups[i] = { rep: 代表字（取較長者）, count }
+  const groups: { rep: string; count: number }[] = []
+  for (const c of candidates) {
+    const hit = groups.find(
+      (g) =>
+        (g.rep.includes(c) || c.includes(g.rep)) && Math.abs(g.rep.length - c.length) <= 2,
+    )
+    if (hit) {
+      hit.count += 1
+      if (c.length > hit.rep.length) hit.rep = c
+    } else {
+      groups.push({ rep: c, count: 1 })
+    }
+  }
+  const repeated = groups.filter((g) => g.count >= 2).map((g) => g.rep)
+  return repeated.length === n ? repeated : null
 }
 
 const RESERVED_WORDS = new Set([
