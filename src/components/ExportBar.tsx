@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { MatrixConfig } from '../types'
+import { normalizeConfig } from '../types'
 import { downloadPng, downloadSvg, copyPngToClipboard, downloadConfig } from '../lib/exporters'
 
 interface Props {
@@ -37,7 +38,7 @@ export default function ExportBar({ cfg, onChange, svgRef }: Props) {
         if (data.version !== 1 || !Array.isArray(data.counts) || !data.style) {
           throw new Error('不是有效的設定檔')
         }
-        onChange(data)
+        onChange(normalizeConfig(data))
         flash('已載入設定檔')
       })
       .catch((e: unknown) => flash(e instanceof Error ? e.message : String(e)))
