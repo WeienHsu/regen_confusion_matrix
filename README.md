@@ -32,3 +32,12 @@ npm run dev
 ## 技術棧
 
 React + Vite + TypeScript，SVG 渲染，Tesseract.js（瀏覽器端 OCR）。
+
+OCR 的 worker / core / 英文語言資料全部由本站提供（`scripts/copy-tesseract-assets.mjs`
+會在 dev / build 時從 node_modules 複製到 `public/tesseract/core/`；語言資料
+`public/tesseract/lang/eng.traineddata.gz` 已進版控），不依賴外部 CDN。
+
+## 設定檔格式
+
+「存設定檔」會輸出包含數值、排序、軸向與所有樣式的 JSON（`version: 1`），
+之後可用「載入設定檔」或直接貼到「貼上 CSV / JSON」分頁還原繼續編輯。
