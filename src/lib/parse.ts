@@ -1,5 +1,5 @@
 import type { MatrixConfig } from '../types'
-import { defaultConfig } from '../types'
+import { defaultConfig, normalizeConfig } from '../types'
 
 export interface ParsedMatrix {
   labels: string[] | null
@@ -26,7 +26,7 @@ export function parsePasted(text: string): ParsedMatrix | MatrixConfig {
     }
     if (data && typeof data === 'object') {
       if (data.version === 1 && Array.isArray(data.counts) && data.style) {
-        return data as MatrixConfig
+        return normalizeConfig(data as MatrixConfig)
       }
       if (Array.isArray(data.counts)) {
         const counts = asNumberGrid(data.counts)

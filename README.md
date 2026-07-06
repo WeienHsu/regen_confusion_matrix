@@ -6,7 +6,7 @@
 
 - **資料輸入**：手動輸入、貼上 CSV / JSON、上傳 PNG 圖片（OCR 輔助辨識 + 手動修正）
 - **排序與軸向**：自訂類別排序（支援多類別）、True / Predicted 軸互換
-- **樣式**：標題、色階（Blues / Greens / Reds / Purples / Greys / 自訂單色）、字體、字級、數值顯示模式（數量 / 百分比 / 兩者）、百分比基準（列 / 欄 / 全體）、colorbar 與 metrics 摘要框開關
+- **樣式**：標題、色階（Blues / Greens / Reds / Purples / Greys / 自訂單色）、字體、字級、數值顯示模式（數量 / 百分比 / 兩者）、百分比基準（列 / 欄 / 全體）、colorbar 與 metrics 摘要框開關、metrics 摘要框位置（圖內右下 / 圖表下方，避免遮擋格子）與字級
 - **匯出**：PNG（1×/2×/4× 解析度）、SVG 向量圖、複製到剪貼簿、設定檔 JSON（可重新載入繼續編輯）
 
 ## 使用方式

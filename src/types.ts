@@ -2,6 +2,7 @@ export type CmapName = 'Blues' | 'Greens' | 'Reds' | 'Purples' | 'Greys' | 'Cust
 
 export type ValueMode = 'both' | 'count' | 'pct'
 export type Normalize = 'row' | 'col' | 'all'
+export type MetricsPosition = 'inside' | 'outside'
 
 export interface StyleConfig {
   title: string
@@ -15,6 +16,9 @@ export interface StyleConfig {
   normalize: Normalize
   showColorbar: boolean
   showMetrics: boolean
+  /** metrics 摘要框位置：inside = 矩陣右下角圖內、outside = 圖表下方（不遮擋格子） */
+  metricsPosition: MetricsPosition
+  metricsFontSize: number
   xAxisTitle: string
   yAxisTitle: string
 }
@@ -42,15 +46,15 @@ export const FONT_OPTIONS: { label: string; value: string }[] = [
 export function defaultConfig(): MatrixConfig {
   return {
     version: 1,
-    labels: ['non_nsvt', 'nsvt'],
+    labels: ['class_1', 'class_2'],
     counts: [
-      [6350, 301],
-      [393, 1210],
+      [85, 15],
+      [10, 90],
     ],
     order: [0, 1],
     transpose: false,
     style: {
-      title: 'Test Confusion Matrix (th=0.98)',
+      title: 'Confusion Matrix',
       cmap: 'Blues',
       customColor: '#0E7490',
       fontFamily: FONT_OPTIONS[2].value,
@@ -61,10 +65,21 @@ export function defaultConfig(): MatrixConfig {
       normalize: 'row',
       showColorbar: true,
       showMetrics: true,
+      metricsPosition: 'inside',
+      metricsFontSize: 15,
       xAxisTitle: 'Predicted Label',
       yAxisTitle: 'True Label',
     },
   }
+}
+
+/**
+ * 補齊舊設定檔缺少的欄位（例如 version 1 早期沒有 metricsPosition），
+ * 讓先前匯出的 JSON 都能繼續載入。
+ */
+export function normalizeConfig(data: MatrixConfig): MatrixConfig {
+  const base = defaultConfig()
+  return { ...base, ...data, style: { ...base.style, ...data.style } }
 }
 
 /** 調整類別數量，保留既有的名稱與數值 */

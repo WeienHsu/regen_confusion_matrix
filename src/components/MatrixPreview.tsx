@@ -37,9 +37,6 @@ export default function MatrixPreview({ cfg, svgRef }: Props) {
     ;[xTitle, yTitle] = [yTitle, xTitle]
   }
 
-  const pad = { l: 110, t: 70, r: style.showColorbar ? 110 : 30, b: 90 }
-  const W = pad.l + CELL * n + pad.r
-  const H = pad.t + CELL * n + pad.b
   const fs = style.valueFontSize
   const lfs = style.labelFontSize
 
@@ -52,8 +49,18 @@ export default function MatrixPreview({ cfg, svgRef }: Props) {
       (c) => `${c.label}  P: ${(c.precision * 100).toFixed(1)}%  R: ${(c.recall * 100).toFixed(1)}%`,
     ),
   ]
-  const mBoxW = Math.max(280, 12 + Math.max(...metricsLines.map((l) => l.length)) * 9)
-  const mBoxH = 22 * metricsLines.length + 16
+  const mfs = style.metricsFontSize
+  const mLineH = Math.round(mfs * 1.5)
+  const mBoxW = Math.max(mfs * 19, 12 + Math.max(...metricsLines.map((l) => l.length)) * mfs * 0.62)
+  const mBoxH = mLineH * metricsLines.length + 16
+  const metricsOutside = style.showMetrics && style.metricsPosition === 'outside'
+
+  const pad = { l: 110, t: 70, r: style.showColorbar ? 110 : 30, b: 90 }
+  const W = pad.l + CELL * n + pad.r
+  // 圖外模式：在 x 軸標題下方多留一塊放 metrics 框，完全不遮擋格子
+  const H = pad.t + CELL * n + pad.b + (metricsOutside ? mBoxH + 14 : 0)
+  const mBoxX = metricsOutside ? pad.l + n * CELL - mBoxW : pad.l + n * CELL - mBoxW - 14
+  const mBoxY = metricsOutside ? pad.t + n * CELL + pad.b - 14 : pad.t + n * CELL - mBoxH - 14
 
   const cbX = pad.l + n * CELL + 30
   const cbH = n * CELL
@@ -113,7 +120,7 @@ export default function MatrixPreview({ cfg, svgRef }: Props) {
         </g>
       ))}
 
-      <text x={pad.l + (n * CELL) / 2} y={H - 28} textAnchor="middle" fontFamily={style.fontFamily} fontSize={lfs + 3} fill="#111111">
+      <text x={pad.l + (n * CELL) / 2} y={pad.t + n * CELL + pad.b - 28} textAnchor="middle" fontFamily={style.fontFamily} fontSize={lfs + 3} fill="#111111">
         {xTitle}
       </text>
       <text textAnchor="middle" fontFamily={style.fontFamily} fontSize={lfs + 3} fill="#111111" transform={`translate(30 ${pad.t + (n * CELL) / 2}) rotate(-90)`}>
@@ -144,8 +151,8 @@ export default function MatrixPreview({ cfg, svgRef }: Props) {
       {style.showMetrics && (
         <g>
           <rect
-            x={pad.l + n * CELL - mBoxW - 14}
-            y={pad.t + n * CELL - mBoxH - 14}
+            x={mBoxX}
+            y={mBoxY}
             width={mBoxW}
             height={mBoxH}
             rx={6}
@@ -156,11 +163,11 @@ export default function MatrixPreview({ cfg, svgRef }: Props) {
           {metricsLines.map((line, k) => (
             <text
               key={k}
-              x={pad.l + n * CELL - 26}
-              y={pad.t + n * CELL - mBoxH - 14 + 24 + k * 22}
+              x={mBoxX + mBoxW - 12}
+              y={mBoxY + 8 + (k + 1) * mLineH - Math.round(mfs * 0.35)}
               textAnchor="end"
               fontFamily="ui-monospace, Consolas, monospace"
-              fontSize={15}
+              fontSize={mfs}
               fontWeight={k === 0 ? 700 : 400}
               fill="#111111"
             >
