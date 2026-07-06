@@ -26,6 +26,58 @@ npm install
 npm run dev
 ```
 
+### 內網 / 自架部署（給區網其他機器使用）
+
+本專案是純靜態網站（OCR 資產也全部內建），部署 = 伺服 `dist/` 資料夾，完全不需要對外網路。
+
+**方式一：`npm run serve`（最簡單，內網小工具夠用）**
+
+```bash
+npm install
+npm run serve
+```
+
+會先 build 再以 `vite preview` 綁定所有網卡，其他機器開
+`http://<主機IP>:4173/regen_confusion_matrix/` 即可使用（注意子路徑）。
+記得防火牆放行 4173 port。
+
+要讓它常駐、開機自啟，搭配 pm2：
+
+```bash
+npm install -g pm2
+pm2 start npm --name cm-formatter -- run serve
+pm2 save
+pm2 startup   # 依照畫面指示執行產生的指令，即可開機自啟
+```
+
+**方式二：nginx / 任何靜態伺服器（長期正式部署建議）**
+
+想部署在網站根路徑時，先以 `--base=/` 重新 build：
+
+```bash
+npx vite build --base=/
+```
+
+再把 `dist/` 指給靜態伺服器，例如 nginx：
+
+```nginx
+server {
+    listen 80;
+    root /path/to/regen_confusion_matrix/dist;
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+若要保留 `/regen_confusion_matrix/` 子路徑則不用改 base，直接：
+
+```nginx
+location /regen_confusion_matrix/ {
+    alias /path/to/regen_confusion_matrix/dist/;
+}
+```
+
 ## 開發流程
 
 - `main`：穩定分支，GitHub Pages 由此分支觸發部署

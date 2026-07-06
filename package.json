@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "node scripts/copy-tesseract-assets.mjs && vite",
     "build": "node scripts/copy-tesseract-assets.mjs && tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "serve": "npm run build && vite preview --host --port 4173"
   },
   "dependencies": {
     "react": "^18.3.1",
