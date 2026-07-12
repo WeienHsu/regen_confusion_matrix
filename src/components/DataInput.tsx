@@ -3,6 +3,8 @@ import type { MatrixConfig } from '../types'
 import { resizeMatrix } from '../types'
 import { parsePasted, applyParsed } from '../lib/parse'
 import { recognizeMatrix } from '../lib/ocr'
+import Section from './Section'
+import NumberInput from './NumberInput'
 
 interface Props {
   cfg: MatrixConfig
@@ -135,14 +137,13 @@ export default function DataInput({ cfg, onChange }: Props) {
                 <th className="rowhead">{cfg.labels[i]}</th>
                 {row.map((v, j) => (
                   <td key={j}>
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       data-i={i}
                       data-j={j}
                       aria-label={`True ${cfg.labels[i]}、Predicted ${cfg.labels[j]}`}
                       value={v}
-                      onChange={(e) => setCount(i, j, Number(e.target.value) || 0)}
+                      onCommit={(val) => setCount(i, j, val)}
                     />
                   </td>
                 ))}
@@ -155,8 +156,7 @@ export default function DataInput({ cfg, onChange }: Props) {
   }
 
   return (
-    <div className="card">
-      <h2>1 · 資料輸入</h2>
+    <Section title="1 · 資料輸入">
       <div className="tabs" role="tablist">
         {(
           [
@@ -275,7 +275,7 @@ export default function DataInput({ cfg, onChange }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </Section>
   )
 }
 
