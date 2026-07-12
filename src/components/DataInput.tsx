@@ -282,11 +282,12 @@ export default function DataInput({ cfg, onChange }: Props) {
 function resizeToGrid(
   cfg: MatrixConfig,
   counts: number[][],
-  ocrLabels: string[] | null,
+  ocrLabels: (string | null)[] | null,
 ): Pick<MatrixConfig, 'labels' | 'counts' | 'order'> {
   const n = counts.length
   return {
-    labels: ocrLabels ?? Array.from({ length: n }, (_, i) => cfg.labels[i] ?? `class_${i + 1}`),
+    // OCR 讀到的類別名稱優先；讀不到的位置保留原名稱或補 class_N
+    labels: Array.from({ length: n }, (_, i) => ocrLabels?.[i] ?? cfg.labels[i] ?? `class_${i + 1}`),
     counts,
     order: Array.from({ length: n }, (_, i) => i),
   }
