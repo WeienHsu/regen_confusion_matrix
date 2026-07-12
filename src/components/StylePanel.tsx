@@ -56,6 +56,10 @@ export default function StylePanel({ cfg, onChange }: Props) {
         </select>
       </div>
       <div className="row">
+        <label htmlFor="st-fs-title">標題字級</label>
+        <input id="st-fs-title" type="number" min={12} max={72} value={s.titleFontSize} onChange={(e) => set('titleFontSize', Number(e.target.value) || 24)} />
+      </div>
+      <div className="row">
         <label htmlFor="st-fs-value">數值字級</label>
         <input id="st-fs-value" type="number" min={10} max={60} value={s.valueFontSize} onChange={(e) => set('valueFontSize', Number(e.target.value) || 26)} />
       </div>
