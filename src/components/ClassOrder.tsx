@@ -1,4 +1,5 @@
 import type { MatrixConfig } from '../types'
+import Section from './Section'
 
 interface Props {
   cfg: MatrixConfig
@@ -15,8 +16,7 @@ export default function ClassOrder({ cfg, onChange }: Props) {
   }
 
   return (
-    <div className="card">
-      <h2>2 · 排序與軸向</h2>
+    <Section title="2 · 排序與軸向">
       <div className="classlist">
         {cfg.order.map((labelIdx, pos) => (
           <div className="classitem" key={labelIdx}>
@@ -45,6 +45,6 @@ export default function ClassOrder({ cfg, onChange }: Props) {
         />
         交換 True / Predicted 軸
       </label>
-    </div>
+    </Section>
   )
 }

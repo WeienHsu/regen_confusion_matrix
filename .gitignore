@@ -4,3 +4,10 @@ public/tesseract/core/
 *.local
 .DS_Store
 npm-debug.log*
+
+# ── Claude Code local state ──
+.claude/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.antigravitycli

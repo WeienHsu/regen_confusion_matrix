@@ -1,5 +1,7 @@
 import type { MatrixConfig, StyleConfig } from '../types'
 import { FONT_OPTIONS } from '../types'
+import Section from './Section'
+import NumberInput from './NumberInput'
 
 interface Props {
   cfg: MatrixConfig
@@ -13,8 +15,7 @@ export default function StylePanel({ cfg, onChange }: Props) {
   }
 
   return (
-    <div className="card">
-      <h2>3 · 樣式</h2>
+    <Section title="3 · 樣式">
       <div className="row">
         <label htmlFor="st-title">標題</label>
         <input id="st-title" type="text" value={s.title} onChange={(e) => set('title', e.target.value)} />
@@ -57,15 +58,15 @@ export default function StylePanel({ cfg, onChange }: Props) {
       </div>
       <div className="row">
         <label htmlFor="st-fs-title">標題字級</label>
-        <input id="st-fs-title" type="number" min={12} max={72} value={s.titleFontSize} onChange={(e) => set('titleFontSize', Number(e.target.value) || 24)} />
+        <NumberInput id="st-fs-title" min={12} max={72} value={s.titleFontSize} onCommit={(v) => set('titleFontSize', v)} />
       </div>
       <div className="row">
         <label htmlFor="st-fs-value">數值字級</label>
-        <input id="st-fs-value" type="number" min={10} max={60} value={s.valueFontSize} onChange={(e) => set('valueFontSize', Number(e.target.value) || 26)} />
+        <NumberInput id="st-fs-value" min={10} max={60} value={s.valueFontSize} onCommit={(v) => set('valueFontSize', v)} />
       </div>
       <div className="row">
         <label htmlFor="st-fs-label">標籤字級</label>
-        <input id="st-fs-label" type="number" min={8} max={40} value={s.labelFontSize} onChange={(e) => set('labelFontSize', Number(e.target.value) || 16)} />
+        <NumberInput id="st-fs-label" min={8} max={40} value={s.labelFontSize} onCommit={(v) => set('labelFontSize', v)} />
       </div>
       <div className="row">
         <label htmlFor="st-valmode">數值顯示</label>
@@ -102,10 +103,10 @@ export default function StylePanel({ cfg, onChange }: Props) {
           </div>
           <div className="row">
             <label htmlFor="st-mfs">Metrics 字級</label>
-            <input id="st-mfs" type="number" min={8} max={30} value={s.metricsFontSize} onChange={(e) => set('metricsFontSize', Number(e.target.value) || 15)} />
+            <NumberInput id="st-mfs" min={8} max={30} value={s.metricsFontSize} onCommit={(v) => set('metricsFontSize', v)} />
           </div>
         </>
       )}
-    </div>
+    </Section>
   )
 }
