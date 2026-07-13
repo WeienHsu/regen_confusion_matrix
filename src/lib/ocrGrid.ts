@@ -162,9 +162,9 @@ export function extractTokens(words: Word[]): {
   anchors: Anchor[]
   labelCandidates: LabelCandidate[]
 } {
-  const tokens: Token[] = []
   const anchors: Anchor[] = []
-  const labelCandidates: LabelCandidate[] = []
+  const numberWords: { word: Word; value: number }[] = []
+  const labelWords: { word: Word; text: string }[] = []
   for (const w of words) {
     const text = w.text.trim()
     const { x0, y0, x1, y1 } = w.bbox
@@ -179,14 +179,40 @@ export function extractTokens(words: Word[]): {
     }
 
     if (/^\d{1,3}(,\d{3})+$|^\d+$/.test(text)) {
-      tokens.push({ value: Number(text.replace(/,/g, '')), cx, cy, h })
+      numberWords.push({ word: w, value: Number(text.replace(/,/g, '')) })
     } else if (/^[A-Za-z_][A-Za-z0-9_-]{2,}$/.test(text) && !RESERVED_WORDS.has(text.toLowerCase())) {
-      labelCandidates.push({ text, cx, cy })
+      labelWords.push({ word: w, text })
     } else if (/^[A-HJ-NP-Z]$/.test(text)) {
       // 單字母類別名稱（如 N/S/V/Q/X），排除 I 與 O 避免和 1、0 混淆
-      labelCandidates.push({ text, cx, cy })
+      labelWords.push({ word: w, text })
     }
   }
+
+  // 「Entity 1」這種帶編號的標籤：編號緊貼在標籤字右側，若當成資料數字
+  // 會在網格外多出一排假 token、毀掉聚類 —— 併回標籤、不進 tokens。
+  // 只對 3 字以上的標籤吸收，避免把長數字被 OCR 切開的殘片誤併給單字母。
+  const tokens: Token[] = []
+  for (const { word: w, value } of numberWords) {
+    const label = labelWords.find(({ word: lw, text }) => {
+      if (text.length < 3 || w.text.trim().length > 4) return false
+      const lh = lw.bbox.y1 - lw.bbox.y0
+      const gap = w.bbox.x0 - lw.bbox.x1
+      const overlap = Math.min(w.bbox.y1, lw.bbox.y1) - Math.max(w.bbox.y0, lw.bbox.y0)
+      return gap > -lh * 0.2 && gap < lh * 0.8 && overlap > (w.bbox.y1 - w.bbox.y0) * 0.5
+    })
+    if (label) {
+      label.text = `${label.text} ${w.text.trim()}`
+      label.word = { ...label.word, bbox: { ...label.word.bbox, x1: w.bbox.x1 } }
+    } else {
+      const { x0, y0, x1, y1 } = w.bbox
+      tokens.push({ value, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, h: y1 - y0 })
+    }
+  }
+  const labelCandidates = labelWords.map(({ word: lw, text }) => ({
+    text,
+    cx: (lw.bbox.x0 + lw.bbox.x1) / 2,
+    cy: (lw.bbox.y0 + lw.bbox.y1) / 2,
+  }))
   return { tokens, anchors, labelCandidates }
 }
 
@@ -240,26 +266,49 @@ function adjacentDiffs(xs: number[]): number[] {
 
 /** 依 y 座標把項目分列（間距超過 1.5 倍中位字高就換列） */
 function clusterRows<T extends { cy: number; h: number }>(items: T[]): T[][] {
-  const sorted = [...items].sort((a, b) => a.cy - b.cy)
-  const medianH = median(sorted.map((t) => t.h))
-  const rowGap = medianH * 1.5
-
-  const rows: T[][] = []
-  for (const t of sorted) {
-    const last = rows[rows.length - 1]
-    if (last && Math.abs(t.cy - last[last.length - 1].cy) <= rowGap) {
-      last.push(t)
-    } else {
-      rows.push([t])
-    }
-  }
-  return rows
+  return cluster1d(items, (t) => t.cy, 1.5)
 }
 
 /**
- * 依 y 座標分列、x 座標排欄，並自動偵測類別數：
- * 「剛好有 k 列、每列剛好 k 個整數」即視為 k×k 網格。
- * 若多個 k 成立，優先採用與目前設定相同的 nHint，否則取最大的 k。
+ * 依 x 座標把 token 分欄。欄距（格子寬）幾乎都大於字高，
+ * 而同一欄內置中對齊的數字 cx 抖動遠小於字高，用 1 倍字高當門檻。
+ */
+function clusterCols<T extends { cx: number; h: number }>(items: T[]): T[][] {
+  return cluster1d(items, (t) => t.cx, 1.0)
+}
+
+/** 一維鏈式聚類：依 key 排序，相鄰間距超過 gapFactor 倍中位字高就切開 */
+function cluster1d<T extends { h: number }>(
+  items: T[],
+  key: (t: T) => number,
+  gapFactor: number,
+): T[][] {
+  const sorted = [...items].sort((a, b) => key(a) - key(b))
+  const gap = median(sorted.map((t) => t.h)) * gapFactor
+
+  const groups: T[][] = []
+  for (const t of sorted) {
+    const last = groups[groups.length - 1]
+    if (last && Math.abs(key(t) - key(last[last.length - 1])) <= gap) {
+      last.push(t)
+    } else {
+      groups.push([t])
+    }
+  }
+  return groups
+}
+
+/**
+ * 依 y 座標分列、x 座標分欄，並自動偵測類別數，重建 k×k 網格。
+ *
+ * 為了容忍網格外的雜訊數字（colorbar 刻度、軸旁殘字），不要求
+ * 「每列剛好 k 個」，而是找出「在至少 k 列都有 token 的 k 個欄」
+ * （雜訊欄如 colorbar 刻度湊不滿 k 列、自然被排除），再取
+ * 「這些欄全部有值」的列組成網格；列裡多餘的 token 直接忽略。
+ *
+ * marginal 總和（很多工具會在底部/右側加總和列/欄）會讓網格多一列/欄：
+ * 允許 k+1 並以「數值恰好等於各欄/列加總」驗證後剝除，驗不過就放棄，
+ * 寧缺勿錯。若多個 k 成立，優先採用與目前設定相同的 nHint，否則取最大的 k。
  */
 export function clusterToGrid(
   tokens: Token[],
@@ -268,39 +317,92 @@ export function clusterToGrid(
   if (tokens.length < 4) return null
 
   const rows = clusterRows(tokens)
+  const cols = clusterCols(tokens)
+  const rowIndex = new Map<Token, number>()
+  rows.forEach((row, i) => row.forEach((t) => rowIndex.set(t, i)))
+  // support[c] = 欄 c 涵蓋的列集合
+  const support = cols.map((col) => new Set(col.map((t) => rowIndex.get(t)!)))
 
-  const byLength = new Map<number, Token[][]>()
-  for (const row of rows) {
-    if (row.length < 2) continue
-    const bucket = byLength.get(row.length) ?? []
-    bucket.push(row)
-    byLength.set(row.length, bucket)
+  const candidates: number[] = []
+  for (let k = 2; k <= 10; k++) {
+    const n = support.filter((s) => s.size >= k).length
+    if (n === k || n === k + 1) candidates.push(k)
   }
-
-  const candidates = [...byLength.entries()]
-    .filter(([k, rs]) => rs.length === k && k >= 2 && k <= 10)
-    .map(([k]) => k)
-    .sort((a, b) => (a === nHint ? -1 : b === nHint ? 1 : b - a))
+  candidates.sort((a, b) => (a === nHint ? -1 : b === nHint ? 1 : b - a))
 
   for (const k of candidates) {
-    const rows = byLength.get(k)!.map((r) => [...r].sort((a, b) => a.cx - b.cx))
-    if (columnsAligned(rows)) {
-      const colCenters = Array.from({ length: k }, (_, j) =>
-        rows.reduce((s, r) => s + r[j].cx, 0) / k,
-      )
-      const rowCenters = rows.map((r) => r.reduce((s, t) => s + t.cy, 0) / k)
-      return {
-        grid: rows.map((r) => r.map((t) => t.value)),
-        geometry: {
-          colCenters,
-          rowCenters,
-          pitchX: median(adjacentDiffs(colCenters)),
-          pitchY: median(adjacentDiffs(rowCenters)),
-        },
-      }
+    const chosenCols = cols.filter((_, c) => support[c].size >= k)
+    // 每個選中欄都有 token 的列才算網格列
+    const fullRowIdx = rows
+      .map((_, i) => i)
+      .filter((i) => chosenCols.every((col) => col.some((t) => rowIndex.get(t) === i)))
+    if (fullRowIdx.length !== k && fullRowIdx.length !== k + 1) continue
+
+    // 每格取多數決的 token（單一變體通常只有一個；跨變體合併時同格會有多票）
+    const cells = fullRowIdx.map((i) =>
+      chosenCols.map((col) => pickCellToken(col.filter((t) => rowIndex.get(t) === i))),
+    )
+    const stripped = stripMargins(cells)
+    if (!stripped) continue
+    const kk = stripped.length
+    if (kk < 2 || kk > 10 || stripped[0].length !== kk) continue
+    if (!columnsAligned(stripped)) continue
+
+    const colCenters = Array.from({ length: kk }, (_, j) =>
+      stripped.reduce((s, r) => s + r[j].cx, 0) / kk,
+    )
+    const rowCenters = stripped.map((r) => r.reduce((s, t) => s + t.cy, 0) / kk)
+    return {
+      grid: stripped.map((r) => r.map((t) => t.value)),
+      geometry: {
+        colCenters,
+        rowCenters,
+        pitchX: median(adjacentDiffs(colCenters)),
+        pitchY: median(adjacentDiffs(rowCenters)),
+      },
     }
   }
   return null
+}
+
+/** 同一格有多個 token（跨變體合併）時取多數決的值，平手取先出現者（排前面的變體優先） */
+function pickCellToken(ts: Token[]): Token {
+  const count = new Map<number, number>()
+  for (const t of ts) count.set(t.value, (count.get(t.value) ?? 0) + 1)
+  return [...ts].sort((a, b) => count.get(b.value)! - count.get(a.value)!)[0]
+}
+
+/**
+ * 剝除 marginal 總和列/欄：
+ * - 列比欄多 1 → 最後一列必須恰等於各欄加總，剝除
+ * - 欄比列多 1 → 最後一欄必須恰等於各列加總，剝除
+ * - 正方形但最後一列與最後一欄「同時」都是加總（含右下角總計）→ 兩者都剝除
+ * 數值驗證用恰好相等，避免誤殺真實資料；驗不過回傳 null 放棄這個候選。
+ */
+function stripMargins(cells: Token[][]): Token[][] | null {
+  const nRows = cells.length
+  const nCols = cells[0].length
+  const colSum = (rows: Token[][], j: number) => rows.reduce((s, r) => s + r[j].value, 0)
+  const rowSum = (row: Token[], upTo: number) => row.slice(0, upTo).reduce((s, t) => s + t.value, 0)
+
+  if (nRows === nCols + 1) {
+    const body = cells.slice(0, -1)
+    const last = cells[nRows - 1]
+    return last.every((t, j) => t.value === colSum(body, j)) ? body : null
+  }
+  if (nCols === nRows + 1) {
+    const body = cells.map((r) => r.slice(0, -1))
+    return cells.every((r, i) => r[nCols - 1].value === rowSum(body[i], nCols - 1)) ? body : null
+  }
+  if (nRows === nCols && nRows >= 3) {
+    const body = cells.slice(0, -1).map((r) => r.slice(0, -1))
+    const bothMargins =
+      cells[nRows - 1].slice(0, -1).every((t, j) => t.value === colSum(body, j)) &&
+      cells.slice(0, -1).every((r, i) => r[nCols - 1].value === rowSum(body[i], nCols - 1)) &&
+      cells[nRows - 1][nCols - 1].value === body.reduce((s, r) => s + rowSum(r, r.length), 0)
+    if (bothMargins && body.length >= 2) return body
+  }
+  return cells
 }
 
 /**
