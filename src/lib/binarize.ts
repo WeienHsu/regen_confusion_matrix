@@ -11,6 +11,12 @@ export const warmTextTone: Tone = (r, _g, b) => 255 - clamp(r - b)
 /** 標準灰階 */
 export const grayTone: Tone = (r, g, b) => Math.round(0.299 * r + 0.587 * g + 0.114 * b)
 
+/**
+ * 反相灰階：深色底上的白字（如色階深處的對角線格）二值化後會變成
+ * 黑底白字、Tesseract 讀不動；反相後成為白底黑字
+ */
+export const invertedGrayTone: Tone = (r, g, b) => 255 - grayTone(r, g, b)
+
 function clamp(v: number): number {
   return v < 0 ? 0 : v > 255 ? 255 : v
 }

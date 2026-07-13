@@ -79,10 +79,14 @@ export async function recognizeFromWords(
   let weakGrid: (OcrResult & { geometry: GridGeometry }) | null = null
   let bestNumbers: number[] = []
   let bestFreqLabels: string[] | null = null
+  const allTokens: Token[] = []
+  const allAnchors: Anchor[] = []
   for (let variantIndex = 0; variantIndex < variantCount; variantIndex++) {
     const words = await getWords(variantIndex)
     const { tokens, anchors, labelCandidates } = extractTokens(words)
     candidateSets.push(labelCandidates)
+    allTokens.push(...tokens)
+    allAnchors.push(...anchors)
     const numbers = [...tokens].sort((a, b) => a.cy - b.cy || a.cx - b.cx).map((t) => t.value)
     if (numbers.length > bestNumbers.length) {
       bestNumbers = numbers
@@ -139,6 +143,55 @@ export async function recognizeFromWords(
       }
     }
   }
+  // 沒有任何變體能單獨拼出完整網格時，把所有變體的 token 合併再試一次：
+  // 深底白字（反相變體才讀得到）與淺底深字（灰階變體才讀得到）常分屬
+  // 不同變體、各自都不完整，但所有變體共用同一像素座標系，合併後
+  // 每格取多數決即可互補，不需要額外的 OCR 時間。
+  if (variantCount > 1) {
+    const mergedAnchors = dedupAnchors(allAnchors)
+    const anchored = anchorGrid(mergedAnchors, allTokens)
+    if (anchored) {
+      if (anchored.reviewCount === 0) {
+        return {
+          grid: anchored.grid,
+          needsReview: false,
+          numbers: bestNumbers,
+          labels: resolveLabels(anchored.geometry),
+        }
+      }
+      if (!bestIncomplete || anchored.reviewCount < bestIncomplete.reviewCount) {
+        bestIncomplete = {
+          grid: anchored.grid,
+          needsReview: true,
+          reviewCount: anchored.reviewCount,
+          numbers: bestNumbers,
+          labels: null,
+          geometry: anchored.geometry,
+        }
+      }
+    } else {
+      const clustered = clusterToGrid(allTokens, nHint)
+      if (clustered) {
+        if (mergedAnchors.length < 4) {
+          return {
+            grid: clustered.grid,
+            needsReview: false,
+            numbers: bestNumbers,
+            labels: resolveLabels(clustered.geometry),
+          }
+        }
+        if (!weakGrid) {
+          weakGrid = {
+            grid: clustered.grid,
+            needsReview: true,
+            numbers: bestNumbers,
+            labels: null,
+            geometry: clustered.geometry,
+          }
+        }
+      }
+    }
+  }
   if (bestIncomplete) {
     const { reviewCount: _rc, geometry, ...result } = bestIncomplete
     return { ...result, labels: resolveLabels(geometry) }
@@ -148,6 +201,21 @@ export async function recognizeFromWords(
     return { ...result, labels: resolveLabels(geometry) }
   }
   return { grid: null, needsReview: true, numbers: bestNumbers, labels: bestFreqLabels }
+}
+
+/**
+ * 跨變體合併時去除同位置的重複錨點（各變體對同一格都會讀到同一個百分比）。
+ * 保留先出現者（排前面的變體優先）。
+ */
+function dedupAnchors(anchors: Anchor[]): Anchor[] {
+  const out: Anchor[] = []
+  for (const a of anchors) {
+    const dup = out.some(
+      (b) => Math.abs(b.cx - a.cx) < b.h && Math.abs(b.cy - a.cy) < b.h * 0.6,
+    )
+    if (!dup) out.push(a)
+  }
+  return out
 }
 
 const RESERVED_WORDS = new Set([

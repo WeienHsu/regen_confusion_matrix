@@ -402,6 +402,32 @@ describe('recognizeFromWords', () => {
     expect(res.needsReview).toBe(true)
   })
 
+  it('跨變體合併：深底白字與淺底深字分屬不同變體時互補成完整網格', async () => {
+    const values = [
+      [50, 2, 3],
+      [4, 60, 6],
+      [7, 8, 70],
+    ]
+    // 變體 0 只讀到淺底深字（非對角線）、變體 1（反相）只讀到深底白字（對角線）
+    const offDiag = cleanGridWords(values).filter((_, idx) => idx % 4 !== 0)
+    const diag = cleanGridWords(values).filter((_, idx) => idx % 4 === 0)
+    const res = await recognizeFromWords(async (i) => (i === 0 ? offDiag : diag), 2, 3)
+    expect(res.grid).toEqual(values)
+    expect(res.needsReview).toBe(false)
+  })
+
+  it('跨變體合併：錨點網格的漏讀數值由其他變體補齊', async () => {
+    const anchorsWords = [
+      word('(90.0)', 100, 100), word('(10.0)', 200, 100),
+      word('(5.0)', 100, 200), word('(95.0)', 200, 200),
+    ]
+    const variant0 = [...anchorsWords, word('90', 100, 70), word('10', 200, 70)]
+    const variant1 = [...anchorsWords, word('5', 100, 170), word('95', 200, 170)]
+    const res = await recognizeFromWords(async (i) => (i === 0 ? variant0 : variant1), 2, 2)
+    expect(res.grid).toEqual([[90, 10], [5, 95]])
+    expect(res.needsReview).toBe(false)
+  })
+
   it('完全拼不出網格時回傳讀到的數字與頻率比對的標籤', async () => {
     const words = [
       word('7', 100, 100), word('3', 300, 400),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { binarizeRgba, grayTone, warmTextTone } from './binarize'
+import { binarizeRgba, grayTone, invertedGrayTone, warmTextTone } from './binarize'
 
 /** 把 [r,g,b] 陣列組成 RGBA byte array */
 function rgba(pixels: [number, number, number][]): Uint8ClampedArray {
@@ -26,6 +26,12 @@ describe('tone 函式', () => {
     expect(grayTone(0, 0, 0)).toBe(0)
     expect(grayTone(255, 0, 0)).toBe(76)
   })
+
+  it('invertedGrayTone 是灰階的反相', () => {
+    expect(invertedGrayTone(255, 255, 255)).toBe(0)
+    expect(invertedGrayTone(0, 0, 0)).toBe(255)
+    expect(invertedGrayTone(255, 0, 0)).toBe(179)
+  })
 })
 
 describe('binarizeRgba', () => {
@@ -40,6 +46,16 @@ describe('binarizeRgba', () => {
     for (let i = 8; i < 16; i++) expect(out[i * 4]).toBe(255)
     // alpha 全為 255
     for (let i = 0; i < 16; i++) expect(out[i * 4 + 3]).toBe(255)
+  })
+
+  it('invertedGrayTone 讓深底上的白字變成白底黑字', () => {
+    const data = rgba([
+      ...Array.from({ length: 12 }, () => [20, 40, 120] as [number, number, number]), // 深藍底
+      ...Array.from({ length: 4 }, () => [250, 250, 250] as [number, number, number]), // 白字
+    ])
+    const out = binarizeRgba(data, invertedGrayTone)
+    for (let i = 0; i < 12; i++) expect(out[i * 4]).toBe(255) // 底 → 白
+    for (let i = 12; i < 16; i++) expect(out[i * 4]).toBe(0) // 字 → 黑
   })
 
   it('warmTextTone 讓藍底上的紅字變成白底黑字', () => {
