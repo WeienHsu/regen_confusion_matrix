@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MatrixConfig } from '../types'
-import { resizeMatrix } from '../types'
+import { resizeMatrix, singleGroups } from '../types'
 import { parsePasted, applyParsed } from '../lib/parse'
 import { recognizeMatrix } from '../lib/ocr'
 import Section from './Section'
@@ -283,12 +283,12 @@ function resizeToGrid(
   cfg: MatrixConfig,
   counts: number[][],
   ocrLabels: (string | null)[] | null,
-): Pick<MatrixConfig, 'labels' | 'counts' | 'order'> {
+): Pick<MatrixConfig, 'labels' | 'counts' | 'groups'> {
   const n = counts.length
   return {
     // OCR 讀到的類別名稱優先；讀不到的位置保留原名稱或補 class_N
     labels: Array.from({ length: n }, (_, i) => ocrLabels?.[i] ?? cfg.labels[i] ?? `class_${i + 1}`),
     counts,
-    order: Array.from({ length: n }, (_, i) => i),
+    groups: singleGroups(n),
   }
 }
