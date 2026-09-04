@@ -1,5 +1,5 @@
 import type { MatrixConfig } from '../types'
-import { defaultConfig, normalizeConfig } from '../types'
+import { defaultConfig, isStoredConfig, normalizeConfig, singleGroups } from '../types'
 
 export interface ParsedMatrix {
   labels: string[] | null
@@ -25,8 +25,8 @@ export function parsePasted(text: string): ParsedMatrix | MatrixConfig {
       return { labels: null, counts: asNumberGrid(data) }
     }
     if (data && typeof data === 'object') {
-      if (data.version === 1 && Array.isArray(data.counts) && data.style) {
-        return normalizeConfig(data as MatrixConfig)
+      if (isStoredConfig(data)) {
+        return normalizeConfig(data)
       }
       if (Array.isArray(data.counts)) {
         const counts = asNumberGrid(data.counts)
@@ -102,6 +102,6 @@ export function applyParsed(parsed: ParsedMatrix, base: MatrixConfig): MatrixCon
     ...base,
     labels: parsed.labels ?? Array.from({ length: n }, (_, i) => base.labels[i] ?? fallback.labels[i] ?? `class_${i + 1}`),
     counts: parsed.counts,
-    order: Array.from({ length: n }, (_, i) => i),
+    groups: singleGroups(n),
   }
 }

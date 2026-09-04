@@ -1,5 +1,5 @@
-import type { MatrixConfig, StyleConfig } from '../types'
-import { FONT_OPTIONS } from '../types'
+import type { MatrixConfig, MetricKey, StyleConfig } from '../types'
+import { FONT_OPTIONS, METRIC_DEFS } from '../types'
 import Section from './Section'
 import NumberInput from './NumberInput'
 
@@ -97,8 +97,16 @@ export default function StylePanel({ cfg, onChange }: Props) {
           <div className="row">
             <label htmlFor="st-mpos">Metrics 位置</label>
             <select id="st-mpos" value={s.metricsPosition} onChange={(e) => set('metricsPosition', e.target.value as StyleConfig['metricsPosition'])}>
-              <option value="inside">圖內（矩陣右下角）</option>
-              <option value="outside">圖表下方（不遮擋格子）</option>
+              <optgroup label="圖外（不遮擋格子）">
+                <option value="below">矩陣下方</option>
+                <option value="right">矩陣右側</option>
+              </optgroup>
+              <optgroup label="圖內（會蓋住格子）">
+                <option value="inside-tl">左上角</option>
+                <option value="inside-tr">右上角</option>
+                <option value="inside-bl">左下角</option>
+                <option value="inside-br">右下角</option>
+              </optgroup>
             </select>
           </div>
           <div className="row">
@@ -107,6 +115,63 @@ export default function StylePanel({ cfg, onChange }: Props) {
           </div>
         </>
       )}
+    </Section>
+  )
+}
+
+export function MetricsChartPanel({ cfg, onChange }: Props) {
+  const s = cfg.style
+  function set<K extends keyof StyleConfig>(key: K, value: StyleConfig[K]) {
+    onChange({ ...cfg, style: { ...s, [key]: value } })
+  }
+
+  function toggleColumn(key: MetricKey, on: boolean) {
+    const next = METRIC_DEFS.filter(
+      (d) => (d.key === key ? on : s.metricsChartColumns.includes(d.key)),
+    ).map((d) => d.key)
+    if (next.length) set('metricsChartColumns', next)
+  }
+
+  return (
+    <Section title="4 · 指標圖（第二張圖）">
+      <div className="row">
+        <label htmlFor="mc-title">標題</label>
+        <input id="mc-title" type="text" value={s.metricsChartTitle} onChange={(e) => set('metricsChartTitle', e.target.value)} />
+      </div>
+      <div className="row">
+        <label htmlFor="mc-mode">呈現方式</label>
+        <select id="mc-mode" value={s.metricsChartMode} onChange={(e) => set('metricsChartMode', e.target.value as StyleConfig['metricsChartMode'])}>
+          <option value="table">表格</option>
+          <option value="bar">長條圖</option>
+        </select>
+      </div>
+      <div className="checkgrid">
+        {METRIC_DEFS.map((d) => (
+          <label className="check" key={d.key}>
+            <input
+              type="checkbox"
+              checked={s.metricsChartColumns.includes(d.key)}
+              onChange={(e) => toggleColumn(d.key, e.target.checked)}
+            />
+            {d.label}
+          </label>
+        ))}
+      </div>
+      <div className="row">
+        <label htmlFor="mc-dec">小數位數</label>
+        <NumberInput id="mc-dec" min={0} max={4} value={s.metricsChartDecimals} onCommit={(v) => set('metricsChartDecimals', v)} />
+      </div>
+      <div className="row">
+        <label htmlFor="mc-fs">字級</label>
+        <NumberInput id="mc-fs" min={10} max={40} value={s.metricsChartFontSize} onCommit={(v) => set('metricsChartFontSize', v)} />
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={s.metricsChartShowAverages} onChange={(e) => set('metricsChartShowAverages', e.target.checked)} />
+        顯示 Macro / Weighted 平均
+      </label>
+      <p className="hint">
+        指標以合併後的類別、one-vs-rest 計算。長條圖只畫比例類指標（Support 是計數，尺度不同故略過）。
+      </p>
     </Section>
   )
 }

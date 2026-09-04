@@ -1,16 +1,18 @@
 import { useRef, useState } from 'react'
 import type { RefObject } from 'react'
-import type { MatrixConfig } from '../types'
-import { normalizeConfig } from '../types'
+import type { MatrixConfig, StoredConfig } from '../types'
+import { isStoredConfig, normalizeConfig } from '../types'
 import { downloadPng, downloadSvg, copyPngToClipboard, downloadConfig } from '../lib/exporters'
 
 interface Props {
   cfg: MatrixConfig
   onChange: (cfg: MatrixConfig) => void
+  /** 目前分頁的圖；匯出只作用於它 */
   svgRef: RefObject<SVGSVGElement>
+  filenameBase: string
 }
 
-export default function ExportBar({ cfg, onChange, svgRef }: Props) {
+export default function ExportBar({ cfg, onChange, svgRef, filenameBase }: Props) {
   const [scale, setScale] = useState(2)
   const [status, setStatus] = useState<string | null>(null)
   const configFileRef = useRef<HTMLInputElement>(null)
@@ -34,8 +36,8 @@ export default function ExportBar({ cfg, onChange, svgRef }: Props) {
     file
       .text()
       .then((text) => {
-        const data = JSON.parse(text) as MatrixConfig
-        if (data.version !== 1 || !Array.isArray(data.counts) || !data.style) {
+        const data = JSON.parse(text) as StoredConfig
+        if (!isStoredConfig(data)) {
           throw new Error('不是有效的設定檔')
         }
         onChange(normalizeConfig(data))
@@ -52,8 +54,8 @@ export default function ExportBar({ cfg, onChange, svgRef }: Props) {
         <option value={2}>2×</option>
         <option value={4}>4×</option>
       </select>
-      <button className="btn primary" onClick={() => withSvg((svg) => downloadPng(svg, scale))}>下載 PNG</button>
-      <button className="btn" onClick={() => withSvg((svg) => downloadSvg(svg))}>下載 SVG</button>
+      <button className="btn primary" onClick={() => withSvg((svg) => downloadPng(svg, scale, `${filenameBase}.png`))}>下載 PNG</button>
+      <button className="btn" onClick={() => withSvg((svg) => downloadSvg(svg, `${filenameBase}.svg`))}>下載 SVG</button>
       <button className="btn" onClick={() => withSvg((svg) => copyPngToClipboard(svg, scale), '已複製 PNG 到剪貼簿')}>
         複製到剪貼簿
       </button>
